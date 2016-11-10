@@ -20,7 +20,7 @@ public class DoubleBond extends UnsaturatedBond {
 	@SuppressWarnings("unused")
 	private final static Logger LOG = Logger.getLogger(DoubleBond.class);
 
-	private static final double DOUBLE_BOND_PRORITY = 4.0;
+	private static final double PRIORITY_DOUBLE_BOND = 4.0;
 
 	private List<SVGLine> lineList;
 	
@@ -33,9 +33,9 @@ public class DoubleBond extends UnsaturatedBond {
 	private void addJoinPoints(ChemistryBuilderParameters parameters) {
 		addJoinPoints(lineList.get(0), lineList.get(1), parameters);
 	}
-	
+
 	public double getPriority() {
-		return DOUBLE_BOND_PRORITY;
+		return PRIORITY_DOUBLE_BOND;
 	}
 	
 	public void add(SVGLine line) {

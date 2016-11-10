@@ -155,20 +155,23 @@ public class MoleculeBuilder {
 		if (group == null) {
 			String[] bits = labelValue.split("(\\s)+");
 			String longestString = "";
-			int longestStringLength = 0;
+			int lengthLongestString = 0;
 			for (String bit : bits) {
-				if (bit.length() > longestStringLength) {
+				if (bit.length() > lengthLongestString) {
 					longestString = bit;
 				}
 			}
 			group = groupList.get(longestString);
+			if (group == null) {
+				group = groupList.get(longestString.replace('1', 'l'));
+			}
 		}
 		return group;
 	}
 
 	public List<CMLLabel> getLabelList(CMLAtom joinableAtom) {
 		List<Element> labelElements = CMLUtil.getQueryElements(
-				joinableAtom, "./cml:label[@name='"+JOIN+"']", CMLUtil.CML_XPATH);
+				joinableAtom, "./cml:label[@name='" + JOIN + "']", CMLUtil.CML_XPATH);
 		List<CMLLabel> labels = new ArrayList<CMLLabel>();
 		for (Element element : labelElements) {
 			CMLLabel label = (CMLLabel) element;
@@ -179,7 +182,7 @@ public class MoleculeBuilder {
 
 	public List<CMLAtom> getJoinableAtomList(CMLMolecule mol) {
 		List<Element> elementList = CMLUtil.getQueryElements(
-				mol, "./cml:atomArray/cml:atom[cml:label[@name='"+JOIN+"']]", CMLUtil.CML_XPATH);
+				mol, "./cml:atomArray/cml:atom[cml:label[@name='" + JOIN + "']]", CMLUtil.CML_XPATH);
 		List<CMLAtom> atomList = new ArrayList<CMLAtom>();
 		for (Element element : elementList) {
 			atomList.add((CMLAtom) element);

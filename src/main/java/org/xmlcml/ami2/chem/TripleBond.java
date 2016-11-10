@@ -68,6 +68,10 @@ public class TripleBond extends UnsaturatedBond {
 		lineList.add(line);
 	}
 	
+	public List<SVGLine> getLines() {
+		return lineList;
+	}
+	
 	public SVGLine getLine(int i) {
 		ensureLineList();
 		return (i < 0 || i >= lineList.size()) ? null : lineList.get(i);

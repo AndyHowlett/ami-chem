@@ -37,6 +37,46 @@
     </bondArray>
   </molecule>
 
+  <molecule title="CH_2_" id="ch2">
+    <atomArray>
+      <atom id="a1" elementType="R">
+        <label name="join">j1</label>
+      </atom>
+      <atom id="a2" elementType="R">
+        <label name="join">j2</label>
+      </atom>
+      <atom id="a3" elementType="C"/>
+      <atom id="a4" elementType="H"/>
+      <atom id="a5" elementType="H"/>
+    </atomArray>
+    <bondArray>
+      <bond atomRefs2="a1 a3" order="S"/>
+      <bond atomRefs2="a2 a3" order="S"/>
+      <bond atomRefs2="a3 a4" order="S"/>
+      <bond atomRefs2="a3 a5" order="S"/>
+    </bondArray>
+  </molecule>
+  
+  <molecule title="H_2_C" id="h2c">
+    <atomArray>
+      <atom id="a1" elementType="R">
+        <label name="join">j1</label>
+      </atom>
+      <atom id="a2" elementType="R">
+        <label name="join">j2</label>
+      </atom>
+      <atom id="a3" elementType="C"/>
+      <atom id="a4" elementType="H"/>
+      <atom id="a5" elementType="H"/>
+    </atomArray>
+    <bondArray>
+      <bond atomRefs2="a1 a3" order="S"/>
+      <bond atomRefs2="a2 a3" order="S"/>
+      <bond atomRefs2="a3 a4" order="S"/>
+      <bond atomRefs2="a3 a5" order="S"/>
+    </bondArray>
+  </molecule>
+
   <molecule title="OH" id="oh">
     <atomArray>
       <atom id="a1" elementType="R">
@@ -57,6 +97,34 @@
         <label name="join">j1</label>
       </atom>
       <atom id="a2" elementType="O"/>
+      <atom id="a3" elementType="H"/>
+    </atomArray>
+    <bondArray>
+      <bond atomRefs2="a1 a2" order="S"/>
+      <bond atomRefs2="a2 a3" order="S"/>
+    </bondArray>
+  </molecule>
+  
+  <molecule title="SH" id="sh">
+    <atomArray>
+      <atom id="a1" elementType="R">
+        <label name="join">j1</label>
+      </atom>
+      <atom id="a2" elementType="S"/>
+      <atom id="a3" elementType="H"/>
+    </atomArray>
+    <bondArray>
+      <bond atomRefs2="a1 a2" order="S"/>
+      <bond atomRefs2="a2 a3" order="S"/>
+    </bondArray>
+  </molecule>
+  
+  <molecule title="HS" id="hs">
+    <atomArray>
+      <atom id="a1" elementType="R">
+        <label name="join">j1</label>
+      </atom>
+      <atom id="a2" elementType="S"/>
       <atom id="a3" elementType="H"/>
     </atomArray>
     <bondArray>

@@ -79,7 +79,7 @@ public class MoleculeCreator {
 	public class CMLPage extends CMLCml {
 
 		private <T extends CMLElement> List<T> getDescendants(String name) {
-			List<Element> elements = XMLUtil.getQueryElements(this, ".//cml:molecule", CMLCml.CML_XPATH);
+			List<Element> elements = XMLUtil.getQueryElements(this, ".//cml:" + name, CMLCml.CML_XPATH);
 			List<T> returnList = new ArrayList<T>();
 			for (Element e : elements) {
 				returnList.add((T) e);
@@ -228,6 +228,14 @@ public class MoleculeCreator {
 
 	private SVGContainerNew inputCopy;
 	
+	static {
+		try {
+			groupList = new GroupList(MoleculeCreator.class.getResource("groups.cml").openStream());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
 	/*static {
 		BufferedReader dict = new BufferedReader(new InputStreamReader(MoleculeCreator.class.getResourceAsStream("/org/xmlcml/xhtml2stm/visitor/chem/groupsdictionary.tab")));
 		String l = null;
@@ -295,14 +303,7 @@ public class MoleculeCreator {
 	public MoleculeCreator(ChemistryBuilder builder) {
 		chemistryBuilder = builder;
 		parameters = new MoleculeCreatorParameters();
-	}
-	
-	static {
-		try {
-			groupList = new GroupList(MoleculeCreator.class.getResource("groups.cml").openStream());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		chemistryBuilder.setParameters(parameters);
 	}
 	
 	public ChemistryBuilder getChemistryBuilder() {
@@ -1261,6 +1262,16 @@ public class MoleculeCreator {
 			double longestSingleBond = Double.MIN_VALUE;
 			for (Joinable joinable : joinableSet) {
 				LOG.trace(joinable);
+				try {
+					addBond(molecule, joinable);
+				} catch (DuplicateBondException e) {
+					return null;
+				} catch (CircularBondException e) {
+					if (!(joinable instanceof SingleBond) || ((SVGLine) joinable.getSVGElement()).getLength() > parameters.getMaximumAbsoluteSeparation()) {
+						return null;
+					}
+					continue;
+				}
 				if (joinable instanceof SingleBond) {
 					CMLAtom[] atoms = getAtomsOfBondByJoinable(molecule, joinable);
 					double length = atoms[0].getXY2().getDistance(atoms[1].getXY2());
@@ -1269,15 +1280,6 @@ public class MoleculeCreator {
 					}
 					if (length < shortestSingleBond) {
 						shortestSingleBond = length;
-					}
-				}
-				try {
-					addBond(molecule, joinable);
-				} catch (DuplicateBondException e) {
-					return null;
-				} catch (CircularBondException e) {
-					if (!(joinable instanceof SingleBond) || ((SVGLine) joinable.getSVGElement()).getLength() > parameters.getMaximumAbsoluteSeparation()) {
-						return null;
 					}
 				}
 			}
@@ -1470,13 +1472,16 @@ public class MoleculeCreator {
 
 	public void createAndAddJunctionAtoms(Collection<Junction> junctionList, CMLMolecule molecule, boolean detectRGroups) {
 		for (Junction junction : junctionList) {
-			LOG.trace("junctionId: " + junction.getID());
+			LOG.trace("Junction: " + junction.getID());
 			String text = JoinableText.getSingleLineTextFromJoinableTexts(junction.getJoinables(), parameters);
 			if (text == null) {
 				text = "C";
 			}
 			//if (smiles == null) {
 			ChemicalElement chemicalElement = ChemicalElement.getChemicalElement(text);
+			if (chemicalElement == null) {
+				chemicalElement = ChemicalElement.getChemicalElement(text.replace('1', 'l'));
+			}
 			if (chemicalElement == null && !detectRGroups) {
 				return;
 			} else if (chemicalElement == null) {
@@ -1527,7 +1532,9 @@ public class MoleculeCreator {
 		} else {
 			drawReactions(outputDirectory.getAbsolutePath());
 		}
-		ChemAnnotator.copyImageFilesFromDirectoryToDirectory(inputCopy.getFile().getParentFile(), outputDirectory);
+		if (inputCopy != null) {
+			ChemAnnotator.copyImageFilesFromDirectoryToDirectory(inputCopy.getFile().getParentFile(), outputDirectory);
+		}
 	}
 	
 	public void createAnnotatedVersionOfInput(File outputDirectory) throws FileNotFoundException {

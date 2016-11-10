@@ -5,21 +5,18 @@ import org.apache.log4j.Logger;
 import org.xmlcml.ami2.plugins.AMIPlugin;
 import org.xmlcml.ami2.plugins.sequence.SequenceArgProcessor;
 
-/** test plugin.
- * 
- * Very simple tasks for testing and tutorials.
+/** 
+ * Plug-in for extracting chemistry from diagrams.
  * 
  * @author pm286
- *
  */
 public class GraphChemPlugin extends AMIPlugin {
 
 	private static final Logger LOG = Logger.getLogger(GraphChemPlugin.class);
+	
 	static {
 		LOG.setLevel(Level.DEBUG);
 	}
-
-//	private SimpleArgProcessor argProcessor;
 	
 	public GraphChemPlugin(String[] args) {
 		super();
@@ -35,7 +32,5 @@ public class GraphChemPlugin extends AMIPlugin {
 		super();
 		this.argProcessor = new GraphChemArgProcessor(args);
 	}
-
-	
 
 }

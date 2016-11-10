@@ -75,7 +75,7 @@ public class ChemOutput {
 			SVGUtil.debug(object, new FileOutputStream(file), 0);
 			
 			if (object instanceof CMLMolecule) {
-				LOG.debug("Writing CMLMolecule SVG and PNG");
+				LOG.debug("Writing SVG and PNG for CMLMolecule");
 				try {
 					flipParities(object);
 					String fileName = file.getAbsolutePath();
@@ -85,7 +85,7 @@ public class ChemOutput {
 				}
 				
 			} else if (object instanceof CMLReaction) {
-				LOG.trace("Writing CMLReaction SVG and PNG");
+				LOG.trace("Writing SVG and PNG for CMLReaction");
 				try {
 					CMLMolecule reactant = ((CMLReaction) object).getReactantList().getReactantElements().get(0).getMolecule();
 					flipParities(reactant);

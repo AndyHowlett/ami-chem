@@ -1,12 +1,12 @@
 package org.xmlcml.ami2.chem;
 
 import java.awt.Graphics2D;
-
 import java.awt.font.GlyphVector;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -28,6 +28,7 @@ import org.apache.log4j.Logger;
 import org.xmlcml.ami2.chem.Joinable.JoinPoint;
 import org.xmlcml.ami2.chem.JoinableText.AreInSameStringDetector;
 import org.xmlcml.ami2.chem.svg.SVGContainerNew;
+import org.xmlcml.diagrams.DiagramAnalyzer;
 import org.xmlcml.diagrams.OCRManager;
 import org.xmlcml.euclid.Angle;
 import org.xmlcml.euclid.Angle.Units;
@@ -37,6 +38,8 @@ import org.xmlcml.euclid.Real2;
 import org.xmlcml.euclid.Real2Array;
 import org.xmlcml.euclid.Real2Range;
 import org.xmlcml.euclid.RealRange;
+import org.xmlcml.euclid.Transform2;
+import org.xmlcml.euclid.Vector2;
 import org.xmlcml.graphics.svg.SVGCircle;
 import org.xmlcml.graphics.svg.SVGConstants;
 import org.xmlcml.graphics.svg.SVGElement;
@@ -107,59 +110,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 	
 	private double scale = 1;
 
-	static class MutuallyExclusiveShortLineTriple {
-	
-		HatchedBond hatchedBond;
-		Charge minus;
-
-		SVGLine line;
-		SingleBond singleBond;
-		
-		public MutuallyExclusiveShortLineTriple(HatchedBond hatchedBond, Charge minus, SVGLine line) {
-			this.hatchedBond = hatchedBond;
-			this.minus = minus;
-			this.line = line;
-		}
-	
-	}
-
-	static class MutuallyExclusiveShortLinePairTriple {
-		
-		HatchedBond hatchedBond;
-
-		SVGLine line1;
-		SVGLine line2;
-		DoubleBond doubleBond;
-		SingleBond singleBond1;
-		SingleBond singleBond2;
-		
-		public MutuallyExclusiveShortLinePairTriple(HatchedBond hatchedBond, SVGLine line1, SVGLine line2) {
-			this.hatchedBond = hatchedBond;
-			this.line1 = line1;
-			this.line2 = line2;
-		}
-		
-	}
-	
-	static class MutuallyExclusiveLinePairPair {
-
-		SVGLine line1;
-		SVGLine line2;
-		DoubleBond doubleBond;
-		SingleBond singleBond1;
-		SingleBond singleBond2;
-		
-		public MutuallyExclusiveLinePairPair(DoubleBond doubleBond) {
-			this.line1 = doubleBond.getLine(0);
-			this.line2 = doubleBond.getLine(1);
-			this.doubleBond = doubleBond;
-		}
-		
-	}
-
-	List<MutuallyExclusiveShortLineTriple> mutuallyExclusiveShortLineTriples;
-	List<MutuallyExclusiveShortLinePairTriple> mutuallyExclusiveShortLinePairTriples;
-	List<MutuallyExclusiveLinePairPair> mutuallyExclusiveLinePairPairs;
+	AmbiguityHandler ambiguityHandler = new AmbiguityHandler(this);
 
 	public ChemistryBuilder(SVGContainerNew svgRoot, long timeout, ChemistryBuilderParameters parameters) {
 		super((SVGElement) svgRoot.getElement(), timeout);
@@ -208,6 +159,10 @@ public class ChemistryBuilder extends SimpleBuilder {
 	public ChemistryBuilderParameters getParameters() {
 		return parameters;
 	}
+	
+	void setParameters(ChemistryBuilderParameters parameters) {
+		this.parameters = parameters;
+	}
 
 	public SVGContainerNew getInputContainer() {
 		return input;
@@ -225,6 +180,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 	public void createHigherPrimitives() {
 		if (higherPrimitives == null) {
 			startTiming();
+			//replaceTextVectorsWithText();
 			createDerivedPrimitives();
 			replaceTextImagesWithText();
 			splitMultiCharacterTexts();
@@ -326,6 +282,23 @@ public class ChemistryBuilder extends SimpleBuilder {
 		return (testFile.isAbsolute() ? testFile : new File(input.getFile().getParentFile().getAbsolutePath() + "/" + filename));
 	}
 	
+	private void replaceTextVectorsWithText() {
+		List<SVGPath> paths = getRawPrimitives().getPathList();
+		Real2Range range = new Real2Range();
+		for (SVGPath path : paths) {
+			range.plusEquals(path.getBoundingBox());
+		}
+		BufferedImage im = new BufferedImage((int) range.getXRange().getRange(), (int) range.getYRange().getRange(), BufferedImage.TYPE_INT_ARGB);
+		Transform2 translate = new Transform2(new Vector2(-range.getXMin(), -range.getYMin()));
+		for (SVGPath path : paths) {
+			path.applyTransform(translate);
+			path.draw(im.createGraphics());
+		}
+		DiagramAnalyzer analyzer = new DiagramAnalyzer();
+		analyzer.setImage(im);
+		SVGSVG out = analyzer.convertPixelsToSVG();
+	}
+	
 	private void replaceTextImagesWithText() {
 		if (rawPrimitives.getImageList().size() == 0) {
 			return;
@@ -404,10 +377,14 @@ public class ChemistryBuilder extends SimpleBuilder {
 		}
 		higherPrimitives.setChargeList(new ArrayList<Charge>());
 		if (smallLines.size() == 0) {
-			mutuallyExclusiveShortLineTriples = new ArrayList<MutuallyExclusiveShortLineTriple>();
-			mutuallyExclusiveShortLinePairTriples = new ArrayList<MutuallyExclusiveShortLinePairTriple>();
+			ambiguityHandler.mutuallyExclusiveShortLineTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLineTriple>();
+			ambiguityHandler.mutuallyExclusiveShortLinePairTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLinePairTriple>();
+			ambiguityHandler.mutuallyExclusiveShortLineTripleTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLineTripleTriple>();
 			return;
 		}
+		
+		sewSmallLines(smallLines);
+		
 		UnionFind<SVGLine> hatchedBonds = UnionFind.create(smallLines);
 		for (int i = 0; i < smallLines.size(); i++) {
 			SVGLine firstLine = smallLines.get(i);
@@ -434,10 +411,39 @@ public class ChemistryBuilder extends SimpleBuilder {
 		handleShortLines(hatchedBonds);
 	}
 
+	private void sewSmallLines(List<SVGLine> smallLines) {
+		Iterator<SVGLine> it = smallLines.iterator();
+		int i = 0;
+		outer: for (SVGLine line1 = it.next(); it.hasNext(); line1 = it.next()) {
+			for (int j = i + 1; j < smallLines.size(); j++) {
+				SVGLine line2 = smallLines.get(j);
+				boolean test1 = line1.getXY(0).isEqualTo(line2.getXY(0), 1.5);
+				boolean test2 = line1.getXY(0).isEqualTo(line2.getXY(1), 1.5);
+				boolean test3 = line1.getXY(1).isEqualTo(line2.getXY(0), 1.5);
+				boolean test4 = line1.getXY(1).isEqualTo(line2.getXY(1), 1.5);
+				if (test1 || test2 || test3 || test4) {
+					if (line1.isParallelOrAntiParallelTo(line2, new Angle(parameters.getMaximumAngleForParallelIfOneLineIsTiny(), Units.RADIANS))) {
+						Real2 common = line1.getCommonEndPoint(line2, 1.5);
+						SVGLine newLine = new SVGLine(line2.getOtherPoint(common, 1.5), line1.getOtherPoint(common, 1.5));
+						if (newLine.isParallelOrAntiParallelTo(line1, new Angle(parameters.getMaximumAngleForParallel(), Units.RADIANS)) && newLine.isParallelOrAntiParallelTo(line2, new Angle(parameters.getMaximumAngleForParallel(), Units.RADIANS))) {
+							it.remove();
+							higherPrimitives.getLineList().remove(line1);
+							line2.setXY(newLine.getXY(0), 0);
+							line2.setXY(newLine.getXY(1), 1);
+							continue outer;
+						}
+					}
+				}
+			}
+			i++;
+		}
+	}
+
 	private void handleShortLines(UnionFind<SVGLine> disjointSets) {
 		final double threshold = parameters.getThresholdForOrderingCheckForHatchedBonds();
-		mutuallyExclusiveShortLineTriples = new ArrayList<MutuallyExclusiveShortLineTriple>();
-		mutuallyExclusiveShortLinePairTriples = new ArrayList<MutuallyExclusiveShortLinePairTriple>();
+		ambiguityHandler.mutuallyExclusiveShortLineTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLineTriple>();
+		ambiguityHandler.mutuallyExclusiveShortLinePairTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLinePairTriple>();
+		ambiguityHandler.mutuallyExclusiveShortLineTripleTriples = new ArrayList<AmbiguityHandler.MutuallyExclusiveShortLineTripleTriple>();
 		List<HatchedBond> hatchList = higherPrimitives.getHatchedBondList();
 		set: for (Set<SVGLine> set : disjointSets.snapshot()) {
 			ArrayList<SVGLine> lines1 = new ArrayList<SVGLine>(set);
@@ -495,30 +501,48 @@ public class ChemistryBuilder extends SimpleBuilder {
 					lines = lines4;
 				}
 				try {
-					double change = lines.get(1).getLength() - lines.get(0).getLength();
-					double direction = Math.signum(change);
-					double firstLength = lines.get(0).getLength();
-					for (int i = 2; i < lines.size() && change > parameters.getLengthTolerance(); i++) {
-						if (Math.signum(lines.get(i).getLength() - firstLength) != direction) {
-							continue set;
+					double lengthFirst = lines.get(0).getLength();
+					double lengthLast = lines.get(lines.size() - 1).getLength();
+					double shortest = Double.MAX_VALUE;
+					double longest = Double.MIN_VALUE;
+					boolean allLongerFirst = true;
+					boolean allShorterFirst = true;
+					boolean allLongerLast = true;
+					boolean allShorterLast = true;
+					for (int i = 0; i < lines.size(); i++) {
+						double length = lines.get(i).getLength();
+						if (length < shortest) {
+							shortest = length;
 						}
+						if (length > longest) {
+							longest = length;
+						}
+						allLongerFirst &= length >= lengthFirst;
+						allShorterFirst &= length <= lengthFirst;
+						allLongerLast &= length >= lengthLast;
+						allShorterLast &= length <= lengthLast;
+					}
+					if (longest - shortest > parameters.getLengthTolerance() && !allLongerFirst && !allShorterFirst && !allLongerLast && !allShorterLast) {
+						continue set;
 					}
 				} catch (IndexOutOfBoundsException e) {
 					
 				}
 				HatchedBond hatchedBond = new HatchedBond(parameters, lines);
 				hatchList.add(hatchedBond);
-				if (lines.size() > 2) {
+				if (lines.size() > 3) {
 					higherPrimitives.getLineList().removeAll(lines);
+				} else if (lines.size() == 3) {
+					ambiguityHandler.mutuallyExclusiveShortLineTripleTriples.add(new AmbiguityHandler.MutuallyExclusiveShortLineTripleTriple(hatchedBond, lines.get(0), lines.get(1), lines.get(2)));
 				} else if (lines.size() == 2) {
-					mutuallyExclusiveShortLinePairTriples.add(new MutuallyExclusiveShortLinePairTriple(hatchedBond, lines.get(0), lines.get(1)));
+					ambiguityHandler.mutuallyExclusiveShortLinePairTriples.add(new AmbiguityHandler.MutuallyExclusiveShortLinePairTriple(hatchedBond, lines.get(0), lines.get(1)));
 				} else {
 					Charge charge = null;
 					if (lines.get(0).isHorizontal(parameters.getFlatLineEpsilon()) && !lines.get(0).isVertical(parameters.getFlatLineEpsilon())) {
 						charge = new Charge(parameters, lines);
 						higherPrimitives.getLineChargeList().add(charge);
 					}
-					mutuallyExclusiveShortLineTriples.add(new MutuallyExclusiveShortLineTriple(hatchedBond, charge, lines.get(0)));
+					ambiguityHandler.mutuallyExclusiveShortLineTriples.add(new AmbiguityHandler.MutuallyExclusiveShortLineTriple(hatchedBond, charge, lines.get(0)));
 				}
 			}
 		}
@@ -535,7 +559,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 		attemptToJoinListOfJoinables(joinables, joinPointsGroupedIntoJunctions);
 		
 		try {
-			handleAmbiguities(joinPointsGroupedIntoJunctions);
+			ambiguityHandler.handleAmbiguities(joinPointsGroupedIntoJunctions);
 		} catch (IllegalArgumentException e) {
 			joinPoints.clear();
 			LOG.debug("Processing failed as the diagram was too complex");
@@ -608,7 +632,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 		higherPrimitives.setMergedJunctionList(junctionList);*/
 	}
 
-	private void attemptToJoinListOfJoinables(List<Joinable> joinables, UnionFind<JoinPoint> joinPointsGroupedIntoJunctions) {
+	void attemptToJoinListOfJoinables(List<Joinable> joinables, UnionFind<JoinPoint> joinPointsGroupedIntoJunctions) {
 		List<JoinableText> texts = new ArrayList<JoinableText>();
 		for (int i = 0; i < joinables.size() - 1; i++) {
 			Joinable joinableI = joinables.get(i);
@@ -641,6 +665,9 @@ public class ChemistryBuilder extends SimpleBuilder {
 			for (int j = i + 1; j < texts.size(); j++) {
 				JoinableText textJ = texts.get(j);
 				checkTime("Took too long to determine what is joined to what");
+				if (!getListOfOverlappingJoinPointsForJoinables(joinPointsGroupedIntoJunctions, textI, textJ).isEmpty()) {
+					System.out.println(textI.getSVGElement().getText() + " " + textJ.getSVGElement().getText());					
+				}
 				joinPointsGroupedIntoJunctions.unionAll(getListOfOverlappingJoinPointsForJoinables(joinPointsGroupedIntoJunctions, textI, textJ));
 			}
 		}
@@ -662,7 +689,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 			i: for (JoinPoint joinPointI : joinPoints) {
 				for (JoinPoint joinPointJ : joinPoints) {
 					if (joinPointI != joinPointJ && joinPointsGroupedIntoJunctions.getObjectsInPartitionOf(joinPointI).contains(joinPointJ)) {
-						continue i;
+						//continue i;
 					}
 				}
 				actualJoinPoints.add(joinPointI);
@@ -678,7 +705,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 			if (!joinPointsGroupedIntoJunctions.contains(overlapList.get(0)) || !joinPointsGroupedIntoJunctions.contains(overlapList.get(1)) || (overlapList.size() > 2 && !joinPointsGroupedIntoJunctions.contains(overlapList.get(2))) || (overlapList.size() > 3 && !joinPointsGroupedIntoJunctions.contains(overlapList.get(3)))) {
 				return new ArrayList<JoinPoint>();
 			}
-			if (mutuallyExclusive(joinableI, joinableJ)) {
+			if (ambiguityHandler.mutuallyExclusive(joinableI, joinableJ)) {
 				return new ArrayList<JoinPoint>();
 			}
 			if (joinableI instanceof JoinableText && joinableJ instanceof JoinableText) {
@@ -733,233 +760,6 @@ public class ChemistryBuilder extends SimpleBuilder {
 			}*/
 		}
 		return new ArrayList<JoinPoint>();
-	}
-
-	private void removeJoinable(Joinable joinable) {
-		higherPrimitives.getJoinableList().remove(joinable);
-		higherPrimitives.getDoubleBondList().remove(joinable);
-		higherPrimitives.getHatchedBondList().remove(joinable);
-		higherPrimitives.getLineChargeList().remove(joinable);
-	}
-
-	private void handleAmbiguities(UnionFind<JoinPoint> joinPointsGroupedIntoJunctions) {
-		for (MutuallyExclusiveShortLineTriple triple : mutuallyExclusiveShortLineTriples) {
-			handleMutuallyExclusiveShortLineTriple(joinPointsGroupedIntoJunctions, triple);
-		}
-		
-		for (MutuallyExclusiveShortLinePairTriple triple : mutuallyExclusiveShortLinePairTriples) {
-			handleMutuallyExclusiveShortLinePairTriple(joinPointsGroupedIntoJunctions, triple);
-		}
-
-		Set<SingleBond> singleBonds = new HashSet<SingleBond>();
-		for (MutuallyExclusiveLinePairPair pair : mutuallyExclusiveLinePairPairs) {
-			singleBonds.add(pair.singleBond1);
-			singleBonds.add(pair.singleBond2);
-		}
-		for (MutuallyExclusiveLinePairPair pair : mutuallyExclusiveLinePairPairs) {
-			handleMutuallyExclusiveLinePairPair(joinPointsGroupedIntoJunctions, singleBonds, pair);
-		}
-	}
-
-	private void handleMutuallyExclusiveShortLineTriple(UnionFind<JoinPoint> joinPointsGroupedIntoJunctions, MutuallyExclusiveShortLineTriple triple) {
-		JoinPoint singleBondFirst = triple.singleBond.getJoinPoints().get(0);
-		JoinPoint singleBondSecond = triple.singleBond.getJoinPoints().get(1);
-		JoinPoint hatchedBondFirst = triple.hatchedBond.getJoinPoints().get(0);
-		JoinPoint hatchedBondSecond = triple.hatchedBond.getJoinPoints().get(1);
-		JoinPoint minus = (triple.minus == null ? null : triple.minus.getJoinPoints().get(0));
-		if (joinPointsGroupedIntoJunctions.getSizeOfPartition(singleBondFirst) == 1 && joinPointsGroupedIntoJunctions.getSizeOfPartition(singleBondSecond) == 1 && joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondFirst) > 1 && joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondSecond) > 1) {
-			undoDamageFromIncorrectMinus(joinPointsGroupedIntoJunctions, minus);
-			joinPointsGroupedIntoJunctions.remove(singleBondFirst);
-			joinPointsGroupedIntoJunctions.remove(singleBondSecond);
-			joinPointsGroupedIntoJunctions.remove(minus);
-			removeJoinable(triple.singleBond);
-			higherPrimitives.getLineList().remove(triple.line);
-			removeJoinable(triple.minus);
-		} else if (joinPointsGroupedIntoJunctions.getSizeOfPartition(singleBondFirst) == 1 && joinPointsGroupedIntoJunctions.getSizeOfPartition(singleBondSecond) == 1 && (joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondFirst) == 1 || joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondSecond) == 1) && minus != null) {
-			joinPointsGroupedIntoJunctions.remove(singleBondFirst);
-			joinPointsGroupedIntoJunctions.remove(singleBondSecond);
-			joinPointsGroupedIntoJunctions.remove(hatchedBondFirst);
-			joinPointsGroupedIntoJunctions.remove(hatchedBondSecond);
-			removeJoinable(triple.singleBond);
-			higherPrimitives.getLineList().remove(triple.line);
-			removeJoinable(triple.hatchedBond);
-			removeJoinable(triple.hatchedBond);
-		} else {
-			undoDamageFromIncorrectMinus(joinPointsGroupedIntoJunctions, minus);
-			joinPointsGroupedIntoJunctions.remove(hatchedBondFirst);
-			joinPointsGroupedIntoJunctions.remove(hatchedBondSecond);
-			joinPointsGroupedIntoJunctions.remove(minus);
-			removeJoinable(triple.hatchedBond);
-			removeJoinable(triple.minus);
-			removeJoinable(triple.hatchedBond);
-			removeJoinable(triple.minus);
-		}
-	}
-	
-	private void handleMutuallyExclusiveShortLinePairTriple(UnionFind<JoinPoint> joinPointsGroupedIntoJunctions, MutuallyExclusiveShortLinePairTriple triple) {
-		joinPointsGroupedIntoJunctions.remove(triple.singleBond1.getJoinPoints().get(0));
-		joinPointsGroupedIntoJunctions.remove(triple.singleBond1.getJoinPoints().get(1));
-		joinPointsGroupedIntoJunctions.remove(triple.singleBond2.getJoinPoints().get(0));
-		joinPointsGroupedIntoJunctions.remove(triple.singleBond2.getJoinPoints().get(1));
-		removeJoinable(triple.singleBond1);
-		removeJoinable(triple.singleBond2);
-		higherPrimitives.getLineList().remove(triple.line1);
-		higherPrimitives.getLineList().remove(triple.line2);
-		if (triple.doubleBond == null) {
-			return;
-		}
-		JoinPoint doubleBondFirst = triple.doubleBond.getJoinPoints().get(0);
-		JoinPoint doubleBondSecond = triple.doubleBond.getJoinPoints().get(1);
-		JoinPoint hatchedBondFirst = triple.hatchedBond.getJoinPoints().get(0);
-		JoinPoint hatchedBondSecond = triple.hatchedBond.getJoinPoints().get(1);
-		if ((joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondFirst) > 1 || joinPointsGroupedIntoJunctions.getSizeOfPartition(hatchedBondSecond) > 1) && joinPointsGroupedIntoJunctions.getSizeOfPartition(doubleBondFirst) == 1 && joinPointsGroupedIntoJunctions.getSizeOfPartition(doubleBondSecond) == 1) {
-			joinPointsGroupedIntoJunctions.remove(doubleBondFirst);
-			joinPointsGroupedIntoJunctions.remove(doubleBondSecond);
-			removeJoinable(triple.doubleBond);
-		} else {
-			joinPointsGroupedIntoJunctions.remove(hatchedBondFirst);
-			joinPointsGroupedIntoJunctions.remove(hatchedBondSecond);
-			removeJoinable(triple.hatchedBond);
-		}
-	}
-
-	private void handleMutuallyExclusiveLinePairPair(UnionFind<JoinPoint> joinPointsGroupedIntoJunctions, Set<SingleBond> singleBonds, MutuallyExclusiveLinePairPair pair) {
-		JoinPoint doubleBondFirst = pair.doubleBond.getJoinPoints().get(0);
-		JoinPoint doubleBondSecond = pair.doubleBond.getJoinPoints().get(1);
-		boolean sewn = joinPointsGroupedIntoJunctions.get(doubleBondFirst).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond1.getJoinPoints().get(0)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondFirst).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond1.getJoinPoints().get(1)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondFirst).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond2.getJoinPoints().get(0)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondFirst).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond2.getJoinPoints().get(1)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondSecond).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond1.getJoinPoints().get(0)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondSecond).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond1.getJoinPoints().get(1)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondSecond).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond2.getJoinPoints().get(0)));
-		sewn |= joinPointsGroupedIntoJunctions.get(doubleBondSecond).equals(joinPointsGroupedIntoJunctions.get(pair.singleBond2.getJoinPoints().get(1)));
-		if (sewn) {
-			Set<JoinPoint> points = joinPointsGroupedIntoJunctions.getObjectsInPartitionOf(doubleBondFirst);
-			boolean foundParallel = false;
-			for (JoinPoint p1 : points) {
-				if (!(p1.getJoinable() instanceof DoubleBond) && !singleBonds.contains(p1.getJoinable()) && Joinable.areParallel(p1.getJoinable(), pair.doubleBond, new Angle(parameters.getToleranceForParallelJoinables(), Units.RADIANS))) {
-					if (foundParallel) {
-						joinPointsGroupedIntoJunctions.explode(points);
-						joinPointsGroupedIntoJunctions.remove(doubleBondFirst);
-						joinPointsGroupedIntoJunctions.remove(doubleBondSecond);
-						removeJoinable(pair.doubleBond);
-						Set<Joinable> joinables = new HashSet<Joinable>();
-						for (JoinPoint p2 : points) {
-							if (p2.getJoinable() != pair.doubleBond) {
-								joinables.add(p2.getJoinable());
-							}
-						}
-						attemptToJoinListOfJoinables(new ArrayList<Joinable>(joinables), joinPointsGroupedIntoJunctions);
-						return;
-					} else {
-						foundParallel = true;
-					}
-				}
-			}
-			points = joinPointsGroupedIntoJunctions.getObjectsInPartitionOf(doubleBondSecond);
-			foundParallel = false;
-			for (JoinPoint p1 : points) {
-				if (!(p1.getJoinable() instanceof DoubleBond) && !singleBonds.contains(p1.getJoinable()) && Joinable.areParallel(p1.getJoinable(), pair.doubleBond, new Angle(parameters.getToleranceForParallelJoinables(), Units.RADIANS))) {
-					if (foundParallel) {
-						joinPointsGroupedIntoJunctions.explode(points);
-						joinPointsGroupedIntoJunctions.remove(doubleBondFirst);
-						joinPointsGroupedIntoJunctions.remove(doubleBondSecond);
-						removeJoinable(pair.doubleBond);
-						Set<Joinable> joinables = new HashSet<Joinable>();
-						for (JoinPoint p2 : points) {
-							if (p2.getJoinable() != pair.doubleBond) {
-								joinables.add(p2.getJoinable());
-							}
-						}
-						attemptToJoinListOfJoinables(new ArrayList<Joinable>(joinables), joinPointsGroupedIntoJunctions);
-						return;
-					} else {
-						foundParallel = true;
-					}
-				}
-			}
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond1.getJoinPoints().get(0));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond1.getJoinPoints().get(1));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond2.getJoinPoints().get(0));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond2.getJoinPoints().get(1));
-			higherPrimitives.getLineList().remove(pair.line1);
-			higherPrimitives.getLineList().remove(pair.line2);
-			removeJoinable(pair.singleBond1);
-			removeJoinable(pair.singleBond2);
-		} else {
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond1.getJoinPoints().get(0));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond1.getJoinPoints().get(1));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond2.getJoinPoints().get(0));
-			joinPointsGroupedIntoJunctions.remove(pair.singleBond2.getJoinPoints().get(1));
-			higherPrimitives.getLineList().remove(pair.line1);
-			higherPrimitives.getLineList().remove(pair.line2);
-			removeJoinable(pair.singleBond1);
-			removeJoinable(pair.singleBond2);
-		}
-	}
-	
-	private void undoDamageFromIncorrectMinus(UnionFind<JoinPoint> joinPointsGroupedIntoJunctions, JoinPoint minus) {
-		if (minus != null) {
-			Set<JoinPoint> points = joinPointsGroupedIntoJunctions.getObjectsInPartitionOf(minus);
-			joinPointsGroupedIntoJunctions.explode(points);
-			Set<Joinable> joinables = new HashSet<Joinable>();
-			for (JoinPoint p : points) {
-				if (p.getJoinable() != minus.getJoinable()) {
-					joinables.add(p.getJoinable());
-				}
-			}
-			attemptToJoinListOfJoinables(new ArrayList<Joinable>(joinables), joinPointsGroupedIntoJunctions);
-		}
-	}
-
-	private boolean mutuallyExclusive(Joinable joinableI, Joinable joinableJ) {
-		for (MutuallyExclusiveShortLineTriple triple : mutuallyExclusiveShortLineTriples) {
-			if (joinableI == triple.hatchedBond && joinableJ == triple.minus || joinableJ == triple.hatchedBond && joinableI == triple.minus) {
-				return true;
-			}
-			if (joinableI == triple.hatchedBond && joinableJ == triple.singleBond || joinableJ == triple.hatchedBond && joinableI == triple.singleBond) {
-				return true;
-			}
-			if (joinableI == triple.singleBond && joinableJ == triple.minus || joinableJ == triple.singleBond && joinableI == triple.minus) {
-				return true;
-			}
-		}
-		
-		for (MutuallyExclusiveShortLinePairTriple triple : mutuallyExclusiveShortLinePairTriples) {
-			if (joinableI == triple.hatchedBond && joinableJ == triple.doubleBond || joinableJ == triple.hatchedBond && joinableI == triple.doubleBond) {
-				return true;
-			}
-			if (joinableI == triple.hatchedBond && joinableJ == triple.singleBond1 || joinableJ == triple.hatchedBond && joinableI == triple.singleBond1) {
-				return true;
-			}
-			if (joinableI == triple.singleBond1 && joinableJ == triple.doubleBond || joinableJ == triple.singleBond1 && joinableI == triple.doubleBond) {
-				return true;
-			}
-			if (joinableI == triple.hatchedBond && joinableJ == triple.singleBond2 || joinableJ == triple.hatchedBond && joinableI == triple.singleBond2) {
-				return true;
-			}
-			if (joinableI == triple.doubleBond && joinableJ == triple.singleBond2 || joinableJ == triple.doubleBond && joinableI == triple.singleBond2) {
-				return true;
-			}
-			if (joinableI == triple.singleBond1 && joinableJ == triple.singleBond2 || joinableJ == triple.singleBond1 && joinableI == triple.singleBond2) {
-				return true;
-			}
-		}
-		
-		/*for (MutuallyExclusiveLinePairPair pair : mutuallyExclusiveLinePairPairs) {
-			if (joinableI == pair.singleBond2 && joinableJ == pair.doubleBond || joinableJ == pair.singleBond2 && joinableI == pair.doubleBond) {
-				return true;
-			}
-			if (joinableI == pair.singleBond2 && joinableJ == pair.singleBond1 || joinableJ == pair.singleBond2 && joinableI == pair.singleBond1) {
-				return true;
-			}
-			if (joinableI == pair.singleBond1 && joinableJ == pair.doubleBond || joinableJ == pair.singleBond1 && joinableI == pair.doubleBond) {
-				return true;
-			}
-		}*/
-		
-		return false;
 	}
 
 	private List<JoinPoint> extractAtomLabelsAndGetRemainingJoinPoints(List<Joinable> joinables) {
@@ -1063,6 +863,7 @@ public class ChemistryBuilder extends SimpleBuilder {
 		joinableList.addAll(createJoinableList(derivedPrimitives.getPolygonList()));
 		joinableList.addAll(createJoinableList(derivedPrimitives.getPathList()));
 		joinableList.addAll(higherPrimitives.getDoubleBondList());
+		joinableList.addAll(higherPrimitives.getTripleBondList());
 		joinableList.addAll(higherPrimitives.getHatchedBondList());
 		joinableList.addAll(higherPrimitives.getLineChargeList());
 		//joinableList.addAll(higherPrimitives.getWordList());
@@ -1074,24 +875,23 @@ public class ChemistryBuilder extends SimpleBuilder {
 	public List<Joinable> createJoinableList(List<? extends SVGElement> elementList) {
 		List<Joinable> joinableList = new ArrayList<Joinable>();
 		for (SVGElement element : elementList) {
-			Joinable joinable = createJoinable(element);
-			if (joinable != null) {
-				joinableList.add(joinable);
-			}
+			List<Joinable> joinables = createJoinables(element);
+			joinableList.addAll(joinables);
 		}
 		return joinableList;
 	}
 
-	private Joinable createJoinable(SVGElement element) {
+	private List<Joinable> createJoinables(SVGElement element) {
+		List<Joinable> joinables = new ArrayList<Joinable>();
 		Joinable joinable = null;
 		if (element instanceof SVGLine) {
 			joinable = new SingleBond(parameters, (SVGLine) element);
-			for (MutuallyExclusiveShortLineTriple triple : mutuallyExclusiveShortLineTriples) {
+			for (AmbiguityHandler.MutuallyExclusiveShortLineTriple triple : ambiguityHandler.mutuallyExclusiveShortLineTriples) {
 				if (triple.line == element) {
 					triple.singleBond = (SingleBond) joinable;
 				}
 			}
-			for (MutuallyExclusiveShortLinePairTriple triple : mutuallyExclusiveShortLinePairTriples) {
+			for (AmbiguityHandler.MutuallyExclusiveShortLinePairTriple triple : ambiguityHandler.mutuallyExclusiveShortLinePairTriples) {
 				if (triple.line1 == element) {
 					triple.singleBond1 = (SingleBond) joinable;
 				}
@@ -1099,7 +899,18 @@ public class ChemistryBuilder extends SimpleBuilder {
 					triple.singleBond2 = (SingleBond) joinable;
 				}
 			}
-			for (MutuallyExclusiveLinePairPair pair : mutuallyExclusiveLinePairPairs) {
+			for (AmbiguityHandler.MutuallyExclusiveShortLineTripleTriple triple : ambiguityHandler.mutuallyExclusiveShortLineTripleTriples) {
+				if (triple.line1 == element) {
+					triple.singleBond1 = (SingleBond) joinable;
+				}
+				if (triple.line2 == element) {
+					triple.singleBond2 = (SingleBond) joinable;
+				}
+				if (triple.line3 == element) {
+					triple.singleBond3 = (SingleBond) joinable;
+				}
+			}
+			for (AmbiguityHandler.MutuallyExclusiveLinePairPair pair : ambiguityHandler.mutuallyExclusiveLinePairPairs) {
 				if (pair.line1 == element) {
 					pair.singleBond1 = (SingleBond) joinable;
 				}
@@ -1107,8 +918,19 @@ public class ChemistryBuilder extends SimpleBuilder {
 					pair.singleBond2 = (SingleBond) joinable;
 				}
 			}
+			for (AmbiguityHandler.MutuallyExclusiveLineTriplePair pair : ambiguityHandler.mutuallyExclusiveLineTriplePairs) {
+				if (pair.line1 == element) {
+					pair.singleBond1 = (SingleBond) joinable;
+				}
+				if (pair.line2 == element) {
+					pair.singleBond2 = (SingleBond) joinable;
+				}
+				if (pair.line3 == element) {
+					pair.singleBond3 = (SingleBond) joinable;
+				}
+			}
 		} else if (element instanceof SVGText) {
-			if (("+".equals(((SVGText) element).getText()) || "-".equals(((SVGText) element).getText())) && !JoinableText.anyTextsInSameString((SVGText) element, derivedPrimitives.getTextList(), parameters, false, true) && !JoinableText.anyTextsToRightInSameString((SVGText) element, derivedPrimitives.getTextList(), parameters, true)) {
+			if (("+".equals(((SVGText) element).getText()) || "-".equals(((SVGText) element).getText())) && !JoinableText.anyTextsInSameString((SVGText) element, derivedPrimitives.getTextList(), parameters, false, true)) {
 				joinable = new Charge(parameters, (SVGText) element);
 			} else {
 				joinable = new JoinableText(parameters, (SVGText) element);
@@ -1122,19 +944,46 @@ public class ChemistryBuilder extends SimpleBuilder {
  			}
  			if (shortest > 0.5) {
  				joinable = new WedgeBond(parameters, (SVGPolygon) element);
- 				wedgeBonds.add((WedgeBond) joinable);
  			}
  		} else if (element instanceof SVGPolygon && ((SVGPolygon) element).createLineList(true).size() == 4) {
- 			for (int i = 0; i < ((SVGPolygon) element).getReal2Array().size(); i++) {
- 				Real2Array withoutPoint = new Real2Array(((SVGPolygon) element).getReal2Array());
+ 			Real2Array real2Array = ((SVGPolygon) element).getReal2Array();
+			for (int i = 0; i < real2Array.size(); i++) {
+ 				Real2Array withoutPoint = new Real2Array(real2Array);
  				Real2 deleted = withoutPoint.get(i);
  				withoutPoint.deleteElement(i);
  				SVGPolygon newPoly = new SVGPolygon(withoutPoint);
  				if (newPoly.containsPoint(deleted, 0)) {//withoutPoint.getRange2().includes(((SVGPolygon) element).getReal2Array().get(i))) {
- 					((SVGPolygon) element).setReal2Array(withoutPoint);
- 					joinable = new WedgeBond(parameters, (SVGPolygon) element);
- 	 				wedgeBonds.add((WedgeBond) joinable);
- 					break;
+ 					if (SimpleBuilder.area(real2Array) / SimpleBuilder.area(newPoly.getReal2Array()) < 0.5) {
+ 						double shortest = Double.MAX_VALUE;
+ 						int nearest = -1;
+ 						for (int p = 0; p < 4; p++) {
+ 							Real2 point1 = real2Array.get(p);
+ 							for (Real2 point2 : real2Array) {
+ 	 							double dist = point1.getDistance(point2);
+ 	 							if (dist != 0 && dist < shortest) {
+ 	 								shortest = dist;
+ 	 								nearest = p;
+ 	 							}
+ 	 						}	
+ 						}
+ 						SVGPolygon polygon1;
+ 						SVGPolygon polygon2;
+ 						if (nearest == 0) {
+ 							polygon1 = new SVGPolygon(new Real2Array(Arrays.asList(real2Array.get(0), real2Array.get(1), real2Array.get(2))));
+ 							polygon2 = new SVGPolygon(new Real2Array(Arrays.asList(real2Array.get(0), real2Array.get(3), real2Array.get(2))));
+ 						} else {
+ 							polygon1 = new SVGPolygon(new Real2Array(Arrays.asList(real2Array.get(1), real2Array.get(2), real2Array.get(3))));
+ 							polygon2 = new SVGPolygon(new Real2Array(Arrays.asList(real2Array.get(1), real2Array.get(0), real2Array.get(3))));
+ 						}	
+						WedgeBond wedge1 = new WedgeBond(parameters, polygon1);
+						joinables.add(wedge1);
+						WedgeBond wedge2 = new WedgeBond(parameters, polygon2);
+						joinables.add(wedge2);
+ 					} else {
+	 					((SVGPolygon) element).setReal2Array(withoutPoint);
+	 					joinable = new WedgeBond(parameters, (SVGPolygon) element);
+	 					break;
+ 					}
  				}
  			}
  		} else if (element instanceof SVGPath) {
@@ -1144,10 +993,13 @@ public class ChemistryBuilder extends SimpleBuilder {
  				
  			}
  		}
-		if (joinable == null) {
+		if (joinable == null && joinables.size() == 0) {
  			LOG.debug("Unknown joinable: " + element);
  		}
-		return joinable;
+		if (joinable != null && joinables.size() == 0) {
+			joinables.add(joinable);
+		}
+		return joinables;
 	}
 
 	private void createUnsaturatedBondLists() {
@@ -1162,15 +1014,26 @@ public class ChemistryBuilder extends SimpleBuilder {
 		List<TripleBond> tripleBondList = unsaturatedBondManager.getTripleBondList();
 		higherPrimitives.setDoubleBondList(doubleBondList);
 		higherPrimitives.setTripleBondList(tripleBondList);
-		mutuallyExclusiveLinePairPairs = new ArrayList<MutuallyExclusiveLinePairPair>();
+		ambiguityHandler.mutuallyExclusiveLinePairPairs = new ArrayList<AmbiguityHandler.MutuallyExclusiveLinePairPair>();
 		bond: for (DoubleBond bond : doubleBondList) {
-			for (MutuallyExclusiveShortLinePairTriple pair : mutuallyExclusiveShortLinePairTriples) {
+			for (AmbiguityHandler.MutuallyExclusiveShortLinePairTriple pair : ambiguityHandler.mutuallyExclusiveShortLinePairTriples) {
 				if ((pair.line1 == bond.getLine(0) && pair.line2 == bond.getLine(1)) || (pair.line1 == bond.getLine(1) && pair.line2 == bond.getLine(0))) {
 					pair.doubleBond = bond;
 					continue bond;
 				}
 			}
-			mutuallyExclusiveLinePairPairs.add(new MutuallyExclusiveLinePairPair(bond));
+			ambiguityHandler.mutuallyExclusiveLinePairPairs.add(new AmbiguityHandler.MutuallyExclusiveLinePairPair(bond));
+			//higherPrimitives.getLineList().add(bond.getLine(0));
+			//higherPrimitives.getLineList().add(bond.getLine(1));
+		}
+		ambiguityHandler.mutuallyExclusiveLineTriplePairs = new ArrayList<AmbiguityHandler.MutuallyExclusiveLineTriplePair>();
+		bond: for (TripleBond bond : tripleBondList) {
+			for (AmbiguityHandler.MutuallyExclusiveShortLineTripleTriple triple : ambiguityHandler.mutuallyExclusiveShortLineTripleTriples) {
+				if (triple.setIfEquals(bond)) {
+					continue bond;
+				}
+			}
+			ambiguityHandler.mutuallyExclusiveLineTriplePairs.add(new AmbiguityHandler.MutuallyExclusiveLineTriplePair(bond));
 			//higherPrimitives.getLineList().add(bond.getLine(0));
 			//higherPrimitives.getLineList().add(bond.getLine(1));
 		}

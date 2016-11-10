@@ -122,7 +122,7 @@ public class ChemistryBuilderParameters {
 	private static final double HATCH_DETECTION_DEFAULT_MAXIMUM_TINY_LINE_LENGTH = 0.8 / DEFAULT_STANDARD_BOND_LENGTH;
 	private static final double DEFAULT_FLAT_LINE_EPSILON = 0.5 / DEFAULT_STANDARD_BOND_LENGTH;
 	private static final double WIGGLY_BOND_DETECTION_DEFAULT_INCORRECT_DIRECTION_TOLERANCE = 0.15 / DEFAULT_STANDARD_BOND_LENGTH;
-	private static final double HATCH_DETECTION_DEFAULT_MAXIMUM_LENGTH_CHANGE_FOR_QUADRILATERAL_HATCHES = 0.01 / DEFAULT_STANDARD_BOND_LENGTH;
+	private static final double HATCH_DETECTION_DEFAULT_MAXIMUM_LENGTH_CHANGE_FOR_QUADRILATERAL_HATCHES = 0.15 / DEFAULT_STANDARD_BOND_LENGTH;
 	private static final double DEFAULT_WIGGLY_BOND_JOINT_POINT_RADIUS = 1.5 / DEFAULT_STANDARD_BOND_LENGTH;
 	
 	private static final double DOUBLE_BOND_DETECTION_DEFAULT_MAXIMUM_ABSOLUTE_SEPARATION = 4.3 / DEFAULT_STANDARD_BOND_LENGTH;
@@ -130,6 +130,8 @@ public class ChemistryBuilderParameters {
 	private static final double DEFAULT_JOIN_POINT_RADIUS = 1.05 / DEFAULT_STANDARD_BOND_LENGTH;
 	
 	private static final double HATCH_DETECTION_DEFAULT_THRESHOLD_FOR_ORDERING_CHECK = 0.1 / DEFAULT_STANDARD_BOND_LENGTH;
+
+	private static final double OCR_DEFAULT_MAXIMUM_IMAGE_ELEMENT_WIDTH = 12 / DEFAULT_STANDARD_BOND_LENGTH;
 	
 	private static final double HATCH_DETECTION_DEFAULT_MAXIMUM_ANGLE_FOR_PARALLEL = 0.15;
 	private static final double DEFAULT_LINE_OVERLAP_EPSILON = 1e-8;
@@ -144,7 +146,6 @@ public class ChemistryBuilderParameters {
 	private static final double WIGGLY_BOND_DETECTION_DEFAULT_RELATIVE_GAP_TOLERANCE = 0.2;
 	private static final int OCR_DEFAULT_BLACK_THRESHOLD = 128;
 	private static final int OCR_MINIMUM_IMAGE_WIDTH = 14;
-	private static final double OCR_DEFAULT_MAXIMUM_IMAGE_ELEMENT_WIDTH = 12;
 	private static final double DEFAULT_RELATIVE_FONT_SIZE_TOLERANCE = 0.9;
 	private static final int DEFAULT_MAXIMUM_OCR_ERROR = 135;//15;
 	
@@ -261,6 +262,10 @@ public class ChemistryBuilderParameters {
 		return thresholdForOrderingCheckForHatchedBonds * standardBondLength;
 	}
 
+	public double getMaximumImageElementWidthForOCR() {
+		return maximumImageElementWidthForOCR * standardBondLength;
+	}
+
 	public double getMaximumAngleForParallel() {
 		return maximumAngleForParallel;
 	}
@@ -311,10 +316,6 @@ public class ChemistryBuilderParameters {
 
 	public int getMimimumImageWidthForOCR() {
 		return mimimumImageWidthForOCR;
-	}
-
-	public double getMaximumImageElementWidthForOCR() {
-		return maximumImageElementWidthForOCR;
 	}
 
 	public double getAllowedFontSizeVariation() {

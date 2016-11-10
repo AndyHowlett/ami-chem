@@ -1,7 +1,10 @@
 package org.xmlcml.ami2;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,18 +12,47 @@ import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
+import org.junit.Test;
 import org.xmlcml.ami2.plugins.AMIPlugin;
 import org.xmlcml.cmine.args.DefaultArgProcessor;
-import org.xmlcml.cmine.files.CMDir;
+import org.xmlcml.cmine.files.CTree;
 import org.xmlcml.xml.XMLUtil;
 
 public class Fixtures {
 
+	@Test
+	public void checkInChIs() throws IOException {
+		BufferedReader r1 = new BufferedReader(new InputStreamReader(new FileInputStream("C:/workspace/inchisforevaluationtest.txt")));
+		String s = "";
+		int i = 0;
+		int numCorrect = 0;
+		while ((s = r1.readLine()) != null) {
+			try {
+				BufferedReader r2 = new BufferedReader(new InputStreamReader(new FileInputStream("C:/workspace/vectors/vectors/molecule" + (i + 1) + ".svg0.txt")));
+				boolean correct = r2.readLine().equals(s);
+				//if (!correct) {
+					System.out.println((i + 1) + " " + correct);
+				//}
+				numCorrect += (correct ? 1 : 0);
+			} catch (Exception e) {
+				//e.printStackTrace();
+				System.out.println((i + 1) + " false");
+			}
+			i++;
+		}
+		System.out.println(numCorrect / ((float) i));
+	}
 	
 	private static final Logger LOG = Logger.getLogger(Fixtures.class);
 	static {
 		LOG.setLevel(Level.DEBUG);
 	}
+	
+	
+	
+	
+	
+	
 	
 	public final static File TEST_RESOURCES_DIR    = new File("src/test/resources/");
 	public final static File TEST_AMI_DIR          = new File(Fixtures.TEST_RESOURCES_DIR, "org/xmlcml/ami2");
@@ -65,7 +97,7 @@ public class Fixtures {
 			throws IOException {
 		LOG.trace("++++++++++++++++++++++   harness   +++++++++++++++++++++++");
 		LOG.trace("temp exists: "+temp+"; e: "+temp.exists()+"; d "+temp.isDirectory());
-		CMDir cmDir = new CMDir(cmDirectory);
+		CTree cmDir = new CTree(cmDirectory);
 		FileUtils.deleteDirectory(temp);
 		cmDir.copyTo(temp, true);
 		
